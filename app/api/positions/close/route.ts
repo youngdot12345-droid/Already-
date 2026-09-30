@@ -4,8 +4,12 @@ import { demoQuotes } from "@/lib/trading/store";
 import { canAi } from "@/lib/mcp/permissions";
 import { recordAudit } from "@/lib/mcp/audit";
 import { recordAdminTradeLoss } from "@/lib/trading/admin-ledger";
+import { getServerSession } from "@/lib/trading/session";
 
 export async function POST(request:Request){
+  const session=await getServerSession();
+  if(!session)return NextResponse.json({error:"Authentication required."},{status:401});
+
   const body=await request.json().catch(()=>({}));
   const positionId=typeof body.positionId==="string"?body.positionId:"";
   const permissions=Array.isArray(body.permissions)?body.permissions:[];
@@ -19,10 +23,18 @@ export async function POST(request:Request){
   try{
     await client.query("BEGIN");
     const r=await client.query(
-      `SELECT id,account_id,symbol,side,volume,entry_price
-       FROM positions WHERE id=$1 AND status='open' FOR UPDATE`,[positionId]);
+      `SELECT p.id,p.account_id,p.symbol,p.side,p.volume,p.entry_price,a.account_type
+       FROM positions p
+       JOIN trading_accounts a ON a.id=p.account_id
+       JOIN users u ON u.id=a.user_id
+       WHERE p.id=$1 AND p.status='open' AND lower(u.email)=lower($2)
+       FOR UPDATE`,[positionId,session.email]);
     const p=r.rows[0];
     if(!p){await client.query("ROLLBACK");return NextResponse.json({error:"Open position not found."},{status:404});}
+    if(p.account_type!=="demo"){
+      await client.query("ROLLBACK");
+      return NextResponse.json({error:"Real-money execution is disabled until a verified broker/execution connection is configured.",code:"LIVE_EXECUTION_DISABLED"},{status:403});
+    }
 
     const quote=demoQuotes[p.symbol];
     if(!quote){await client.query("ROLLBACK");return NextResponse.json({error:"No close price available for symbol."},{status:422});}
@@ -47,8 +59,7 @@ export async function POST(request:Request){
       "UPDATE trading_accounts SET balance=$1,equity=$2,margin=$3,free_margin=$4 WHERE id=$5",
       [newBalance,newBalance,newMargin,newFreeMargin,p.account_id]);
 
-    // In Already's internal/demo dealing model, a trader loss is retained by the platform.
-    if(pnl<0) await recordAdminTradeLoss(client,positionId,p.account_id,Math.abs(pnl));
+    if(pnl<0)await recordAdminTradeLoss(client,positionId,p.account_id,Math.abs(pnl));
 
     await client.query("COMMIT");
     recordAudit({actor:"ai",action:"positions.close",allowed:true,metadata:{positionId,symbol:p.symbol,realizedPnl:pnl.toString(),adminTradeLoss:pnl<0?Math.abs(pnl).toString():"0"}});
