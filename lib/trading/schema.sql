@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
@@ -30,5 +32,20 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS orders_account_created_idx
-  ON orders(account_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS positions (
+  id UUID PRIMARY KEY,
+  account_id UUID NOT NULL REFERENCES trading_accounts(id) ON DELETE CASCADE,
+  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  symbol TEXT NOT NULL,
+  side TEXT NOT NULL CHECK (side IN ('buy','sell')),
+  volume NUMERIC(20,8) NOT NULL CHECK (volume > 0),
+  entry_price NUMERIC(30,12) NOT NULL,
+  stop_loss NUMERIC(30,12),
+  take_profit NUMERIC(30,12),
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','closed')),
+  opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  closed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS orders_account_created_idx ON orders(account_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS positions_account_status_idx ON positions(account_id, status);
