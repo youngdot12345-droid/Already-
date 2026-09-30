@@ -1,17 +1,18 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/trading/postgres";
-import { canAi } from "@/lib/mcp/permissions";
 import { recordAudit } from "@/lib/mcp/audit";
+import { getServerAiPermissions, hasServerAiPermission } from "@/lib/mcp/server-permissions";
 
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({}));
-  const positionId = typeof body.positionId === "string" ? body.positionId : "";
-  const permissions = Array.isArray(body.permissions) ? body.permissions : [];
-  if (!canAi("orders.modify", permissions)) {
+  const { session, permissions } = await getServerAiPermissions();
+  if (!session) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  if (!hasServerAiPermission("orders.modify", permissions)) {
     recordAudit({ actor: "ai", action: "orders.modify", allowed: false });
-    return NextResponse.json({ error: "Order-modify permission is not granted." }, { status: 403 });
+    return NextResponse.json({ error: "AI order-modify permission is not enabled for this server." }, { status: 403 });
   }
 
+  const body = await request.json().catch(() => ({}));
+  const positionId = typeof body.positionId === "string" ? body.positionId : "";
   const stopLoss = body.stopLoss === undefined ? null : Number(body.stopLoss);
   const takeProfit = body.takeProfit === undefined ? null : Number(body.takeProfit);
   if (!positionId) return NextResponse.json({ error: "positionId is required." }, { status: 400 });
@@ -23,7 +24,9 @@ export async function POST(request: Request) {
       `SELECT p.side, p.entry_price, a.account_type
        FROM positions p
        JOIN trading_accounts a ON a.id = p.account_id
-       WHERE p.id = $1 AND p.status = 'open'`, [positionId]
+       JOIN users u ON u.id = a.user_id
+       WHERE p.id = $1 AND p.status = 'open' AND lower(u.email) = lower($2)`,
+      [positionId, session.email]
     );
     const position = current.rows[0];
     if (!position) return NextResponse.json({ error: "Open position not found." }, { status: 404 });
