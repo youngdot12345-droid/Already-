@@ -19,11 +19,21 @@ export async function POST(request: Request) {
   if (takeProfit !== null && (!Number.isFinite(takeProfit) || takeProfit <= 0)) return NextResponse.json({ error: "Invalid take-profit." }, { status: 400 });
 
   try {
-    const current = await query<{ side: "buy"|"sell"; entry_price: number }>(
-      `SELECT side, entry_price FROM positions WHERE id = $1 AND status = 'open'`, [positionId]
+    const current = await query<{ side: "buy"|"sell"; entry_price: number; account_type: "demo"|"real" }>(
+      `SELECT p.side, p.entry_price, a.account_type
+       FROM positions p
+       JOIN trading_accounts a ON a.id = p.account_id
+       WHERE p.id = $1 AND p.status = 'open'`, [positionId]
     );
     const position = current.rows[0];
     if (!position) return NextResponse.json({ error: "Open position not found." }, { status: 404 });
+
+    if (position.account_type !== "demo") {
+      return NextResponse.json({
+        error: "Real-money execution is disabled until a verified broker/execution connection is configured.",
+        code: "LIVE_EXECUTION_DISABLED"
+      }, { status: 403 });
+    }
 
     if (stopLoss !== null && (position.side === "buy" ? stopLoss >= position.entry_price : stopLoss <= position.entry_price))
       return NextResponse.json({ error: "Stop-loss is on the wrong side of entry." }, { status: 422 });
@@ -36,7 +46,7 @@ export async function POST(request: Request) {
       [stopLoss, takeProfit, positionId]
     );
     recordAudit({ actor: "ai", action: "orders.modify", allowed: true, metadata: { positionId } });
-    return NextResponse.json({ ok: true, position: result.rows[0] });
+    return NextResponse.json({ ok: true, position: result.rows[0], mode: "demo-persistent" });
   } catch {
     return NextResponse.json({ error: "Database unavailable." }, { status: 503 });
   }
