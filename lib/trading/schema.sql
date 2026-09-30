@@ -49,3 +49,12 @@ CREATE TABLE IF NOT EXISTS positions (
 
 CREATE INDEX IF NOT EXISTS orders_account_created_idx ON orders(account_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS positions_account_status_idx ON positions(account_id, status);
+\nCREATE TABLE IF NOT EXISTS audit_events (
+  id UUID PRIMARY KEY,
+  actor TEXT NOT NULL CHECK (actor IN ('user','ai','system')),
+  action TEXT NOT NULL,
+  allowed BOOLEAN NOT NULL,
+  metadata JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS audit_events_created_idx ON audit_events(created_at DESC);
