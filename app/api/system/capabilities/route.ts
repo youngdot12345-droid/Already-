@@ -8,6 +8,20 @@ export async function GET() {
     platform: "Already",
     mode: "foundation",
     baseCurrency: PLATFORM_CURRENCY,
+    accountModes: {
+      demo: {
+        enabled: true,
+        startingBalance: 10000,
+        currency: "USD",
+        execution: "demo"
+      },
+      real: {
+        enabled: true,
+        startingBalance: 0,
+        currency: "USD",
+        execution: "disabled-until-verified-broker"
+      }
+    },
     database: getDbStatus(),
     capabilities: {
       marketData: "demo",
