@@ -58,3 +58,34 @@ CREATE INDEX IF NOT EXISTS positions_account_status_idx ON positions(account_id,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS audit_events_created_idx ON audit_events(created_at DESC);
+
+
+CREATE TABLE IF NOT EXISTS payout_methods (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL CHECK (provider IN ('opay','paypal')),
+  account_reference TEXT NOT NULL,
+  display_name TEXT,
+  verified BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS payout_methods_user_provider_ref_idx
+  ON payout_methods(user_id, provider, account_reference);
+
+CREATE TABLE IF NOT EXISTS withdrawals (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  account_id UUID NOT NULL REFERENCES trading_accounts(id) ON DELETE CASCADE,
+  payout_method_id UUID NOT NULL REFERENCES payout_methods(id),
+  amount NUMERIC(20,8) NOT NULL CHECK (amount > 0),
+  currency CHAR(3) NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','approved','processing','completed','failed','cancelled')),
+  provider_reference TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS withdrawals_user_created_idx
+  ON withdrawals(user_id, created_at DESC);
