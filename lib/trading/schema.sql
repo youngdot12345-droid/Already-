@@ -89,3 +89,24 @@ CREATE TABLE IF NOT EXISTS withdrawals (
 
 CREATE INDEX IF NOT EXISTS withdrawals_user_created_idx
   ON withdrawals(user_id, created_at DESC);
+
+
+CREATE TABLE IF NOT EXISTS withdrawal_fee_rules (
+  id UUID PRIMARY KEY,
+  provider TEXT NOT NULL CHECK (provider IN ('opay','paypal')),
+  fee_type TEXT NOT NULL CHECK (fee_type IN ('fixed','percentage','fixed_plus_percentage')),
+  fixed_fee NUMERIC(20,8) NOT NULL DEFAULT 0 CHECK (fixed_fee >= 0),
+  percentage_fee NUMERIC(10,6) NOT NULL DEFAULT 0 CHECK (percentage_fee >= 0),
+  currency CHAR(3) NOT NULL DEFAULT 'USD',
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS withdrawal_ledger (
+  id UUID PRIMARY KEY,
+  withdrawal_id UUID NOT NULL REFERENCES withdrawals(id) ON DELETE CASCADE,
+  entry_type TEXT NOT NULL CHECK (entry_type IN ('withdrawal','fee','refund')),
+  amount NUMERIC(20,8) NOT NULL,
+  currency CHAR(3) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
