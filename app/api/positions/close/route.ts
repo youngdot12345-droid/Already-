@@ -1,22 +1,20 @@
 import { NextResponse } from "next/server";
 import { getPool } from "@/lib/trading/postgres";
 import { demoQuotes } from "@/lib/trading/store";
-import { canAi } from "@/lib/mcp/permissions";
 import { recordAudit } from "@/lib/mcp/audit";
 import { recordAdminTradeLoss } from "@/lib/trading/admin-ledger";
-import { getServerSession } from "@/lib/trading/session";
+import { getServerAiPermissions, hasServerAiPermission } from "@/lib/mcp/server-permissions";
 
 export async function POST(request:Request){
-  const session=await getServerSession();
+  const { session, permissions } = await getServerAiPermissions();
   if(!session)return NextResponse.json({error:"Authentication required."},{status:401});
+  if(!hasServerAiPermission("positions.close",permissions)){
+    recordAudit({actor:"ai",action:"positions.close",allowed:false});
+    return NextResponse.json({error:"AI position-close permission is not enabled for this server."},{status:403});
+  }
 
   const body=await request.json().catch(()=>({}));
   const positionId=typeof body.positionId==="string"?body.positionId:"";
-  const permissions=Array.isArray(body.permissions)?body.permissions:[];
-  if(!canAi("positions.close",permissions)){
-    recordAudit({actor:"ai",action:"positions.close",allowed:false});
-    return NextResponse.json({error:"Position-close permission is not granted."},{status:403});
-  }
   if(!positionId)return NextResponse.json({error:"positionId is required."},{status:400});
 
   const client=await getPool().connect();
@@ -41,8 +39,7 @@ export async function POST(request:Request){
     const closePrice=p.side==="buy"?quote.bid:quote.ask;
     const pnl=(p.side==="buy"?closePrice-Number(p.entry_price):Number(p.entry_price)-closePrice)*Number(p.volume);
 
-    const account=await client.query(
-      "SELECT balance,margin FROM trading_accounts WHERE id=$1 FOR UPDATE",[p.account_id]);
+    const account=await client.query("SELECT balance,margin FROM trading_accounts WHERE id=$1 FOR UPDATE",[p.account_id]);
     if(!account.rows[0]){await client.query("ROLLBACK");return NextResponse.json({error:"Trading account not found."},{status:404});}
 
     const releasedMargin=Number(p.volume)*Number(p.entry_price);
