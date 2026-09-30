@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS positions (
 
 CREATE INDEX IF NOT EXISTS orders_account_created_idx ON orders(account_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS positions_account_status_idx ON positions(account_id, status);
-\nCREATE TABLE IF NOT EXISTS audit_events (
+CREATE TABLE IF NOT EXISTS audit_events (
   id UUID PRIMARY KEY,
   actor TEXT NOT NULL CHECK (actor IN ('user','ai','system')),
   action TEXT NOT NULL,
@@ -110,3 +110,15 @@ CREATE TABLE IF NOT EXISTS withdrawal_ledger (
   currency CHAR(3) NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+
+CREATE TABLE IF NOT EXISTS platform_revenue_ledger (
+  id UUID PRIMARY KEY,
+  source_type TEXT NOT NULL CHECK (source_type IN ('withdrawal_fee')),
+  source_id UUID NOT NULL,
+  amount NUMERIC(20,8) NOT NULL CHECK (amount > 0),
+  currency CHAR(3) NOT NULL DEFAULT 'USD' CHECK (currency = 'USD'),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS platform_revenue_source_idx ON platform_revenue_ledger(source_type, source_id);
+CREATE INDEX IF NOT EXISTS platform_revenue_created_idx ON platform_revenue_ledger(created_at DESC);
