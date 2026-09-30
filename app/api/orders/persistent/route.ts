@@ -1,16 +1,23 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/trading/postgres";
+import { getServerSession } from "@/lib/trading/session";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  const session = await getServerSession();
+  if (!session) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+
   const accountId = new URL(request.url).searchParams.get("accountId");
   if (!accountId) return NextResponse.json({ error: "accountId is required." }, { status: 400 });
 
   try {
     const account = await query<{account_type:"demo"|"real";currency:string}>(
-      `SELECT account_type, currency FROM trading_accounts WHERE id=$1`,
-      [accountId]
+      `SELECT a.account_type, a.currency
+       FROM trading_accounts a
+       JOIN users u ON u.id = a.user_id
+       WHERE a.id=$1 AND lower(u.email)=lower($2)`,
+      [accountId, session.email]
     );
     if (!account.rows[0]) return NextResponse.json({ error: "Trading account not found." }, { status: 404 });
 
