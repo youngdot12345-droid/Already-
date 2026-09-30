@@ -29,12 +29,21 @@ export async function POST(request: Request) {
     await client.query("BEGIN");
 
     const account = await client.query(
-      "SELECT id, balance, margin, free_margin FROM trading_accounts WHERE id=$1 FOR UPDATE",
+      "SELECT id, account_type, balance, margin, free_margin FROM trading_accounts WHERE id=$1 FOR UPDATE",
       [accountId]
     );
     if (!account.rows[0]) {
       await client.query("ROLLBACK");
       return NextResponse.json({ error:"Trading account not found." },{status:404});
+    }
+
+    // Real accounts remain read-only until a verified broker/execution connection exists.
+    if (account.rows[0].account_type !== "demo") {
+      await client.query("ROLLBACK");
+      return NextResponse.json({
+        error:"Real-money execution is disabled until a verified broker/execution connection is configured.",
+        code:"LIVE_EXECUTION_DISABLED"
+      },{status:403});
     }
 
     const open = await client.query(
@@ -84,7 +93,7 @@ export async function POST(request: Request) {
     );
 
     await client.query("COMMIT");
-    return NextResponse.json({ok:true,order,mode:"demo-persistent",account:{margin:newMargin,freeMargin:newFreeMargin}});
+    return NextResponse.json({ok:true,order,mode:"demo-persistent",account:{accountType:"demo",margin:newMargin,freeMargin:newFreeMargin}});
   } catch {
     await client.query("ROLLBACK").catch(()=>{});
     return NextResponse.json({error:"Database transaction failed."},{status:503});
