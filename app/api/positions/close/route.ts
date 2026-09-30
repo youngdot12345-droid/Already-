@@ -3,6 +3,7 @@ import { getPool } from "@/lib/trading/postgres";
 import { demoQuotes } from "@/lib/trading/store";
 import { canAi } from "@/lib/mcp/permissions";
 import { recordAudit } from "@/lib/mcp/audit";
+import { recordAdminTradeLoss } from "@/lib/trading/admin-ledger";
 
 export async function POST(request:Request){
   const body=await request.json().catch(()=>({}));
@@ -46,9 +47,12 @@ export async function POST(request:Request){
       "UPDATE trading_accounts SET balance=$1,equity=$2,margin=$3,free_margin=$4 WHERE id=$5",
       [newBalance,newBalance,newMargin,newFreeMargin,p.account_id]);
 
+    // In Already's internal/demo dealing model, a trader loss is retained by the platform.
+    if(pnl<0) await recordAdminTradeLoss(client,positionId,p.account_id,Math.abs(pnl));
+
     await client.query("COMMIT");
-    recordAudit({actor:"ai",action:"positions.close",allowed:true,metadata:{positionId,symbol:p.symbol,realizedPnl:pnl.toString()}});
-    return NextResponse.json({ok:true,position:closed.rows[0],closePrice,realizedPnl:pnl,account:{balance:newBalance,equity:newBalance,margin:newMargin,freeMargin:newFreeMargin},mode:"demo"});
+    recordAudit({actor:"ai",action:"positions.close",allowed:true,metadata:{positionId,symbol:p.symbol,realizedPnl:pnl.toString(),adminTradeLoss:pnl<0?Math.abs(pnl).toString():"0"}});
+    return NextResponse.json({ok:true,position:closed.rows[0],closePrice,realizedPnl:pnl,adminRevenue:pnl<0?Math.abs(pnl):0,account:{balance:newBalance,equity:newBalance,margin:newMargin,freeMargin:newFreeMargin},mode:"demo"});
   }catch{
     await client.query("ROLLBACK").catch(()=>{});
     return NextResponse.json({error:"Database transaction failed."},{status:503});
