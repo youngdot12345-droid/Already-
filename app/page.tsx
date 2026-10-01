@@ -23,9 +23,12 @@ export default function Home(){
   const [activeTab,setActiveTab]=useState("Positions");
   const [aiAccess,setAiAccess]=useState({market:true,account:true,analysis:true,orders:false});
   const [accounts,setAccounts]=useState<any[]>([]);
+  const [positions,setPositions]=useState<any[]>([]);
+  const [orders,setOrders]=useState<any[]>([]);
   const [accountType,setAccountType]=useState<"demo"|"real">("demo");
   const activeAccount=accounts.find(a=>a.account_type===accountType);
   useEffect(()=>{fetch("/api/accounts",{cache:"no-store"}).then(r=>r.ok?r.json():null).then(d=>{if(d?.accounts)setAccounts(d.accounts)}).catch(()=>{});},[]);
+  useEffect(()=>{if(!activeAccount?.id)return; const load=()=>{Promise.all([fetch(`/api/positions/persistent?accountId=${activeAccount.id}`,{cache:"no-store"}),fetch(`/api/orders/persistent?accountId=${activeAccount.id}`,{cache:"no-store"})]).then(async([p,o])=>{const pd=p.ok?await p.json():{};const od=o.ok?await o.json():{};setPositions(pd.positions??[]);setOrders(od.orders??[])}).catch(()=>{})};load();const timer=setInterval(load,5000);return()=>clearInterval(timer)},[activeAccount?.id]);
 
   const toggle=(key:keyof typeof aiAccess)=>setAiAccess(v=>({...v,[key]:!v}));
 
@@ -71,7 +74,7 @@ export default function Home(){
         </div>
         <div className="trade-table">
           <div className="table-head"><span>SYMBOL</span><span>TYPE</span><span>VOLUME</span><span>OPEN PRICE</span><span>SL / TP</span><span>P/L</span><span>ACTION</span></div>
-          <div className="empty-row">No {activeTab.toLowerCase()} yet. Your persistent trading data will appear here.</div>
+          {activeTab==="Positions" ? (positions.length ? positions.map(p=><div className="empty-row" key={p.id}>{p.symbol} · {p.side.toUpperCase()} · {p.volume} lots · {p.entry_price} · SL {p.stop_loss??"—"} / TP {p.take_profit??"—"}</div>) : <div className="empty-row">No open positions.</div>) : activeTab==="Pending Orders" ? (orders.filter(o=>o.status==="pending").length ? orders.filter(o=>o.status==="pending").map(o=><div className="empty-row" key={o.id}>{o.symbol} · {o.side.toUpperCase()} · {o.volume} lots · {o.type}</div>) : <div className="empty-row">No pending orders.</div>) : <div className="empty-row">Trade history will appear here.</div>}
         </div>
       </section>
 
