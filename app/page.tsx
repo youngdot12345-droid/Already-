@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Activity, Bot, CandlestickChart, ShieldCheck, Wallet, Settings, UserRound, Bell, Search, ChevronDown } from "lucide-react";
 
 const markets=[
@@ -22,6 +22,10 @@ export default function Home(){
   const [oneClick,setOneClick]=useState(false);
   const [activeTab,setActiveTab]=useState("Positions");
   const [aiAccess,setAiAccess]=useState({market:true,account:true,analysis:true,orders:false});
+  const [accounts,setAccounts]=useState<any[]>([]);
+  const [accountType,setAccountType]=useState<"demo"|"real">("demo");
+  const activeAccount=accounts.find(a=>a.account_type===accountType);
+  useEffect(()=>{fetch("/api/accounts",{cache:"no-store"}).then(r=>r.ok?r.json():null).then(d=>{if(d?.accounts)setAccounts(d.accounts)}).catch(()=>{});},[]);
 
   const toggle=(key:keyof typeof aiAccess)=>setAiAccess(v=>({...v,[key]:!v}));
 
@@ -29,7 +33,7 @@ export default function Home(){
     <header className="topbar">
       <div className="brand"><div className="logo">A</div><span>ALREADY</span><small>TRADING TERMINAL</small></div>
       <div className="top-search"><Search size={16}/><input placeholder="Search markets, symbols..." /></div>
-      <div className="topicons"><Bell/><Activity/><Wallet/><Settings/><UserRound/></div>
+      <div className="topicons"><button className="account-switch" onClick={()=>setAccountType(v=>v==="demo"?"real":"demo")}>{accountType.toUpperCase()} · ${Number(activeAccount?.balance??0).toLocaleString("en-US",{minimumFractionDigits:2})}</button><Bell/><Activity/><Wallet/><Settings/><UserRound/></div>
     </header>
 
     <section className="workspace">
@@ -63,7 +67,7 @@ export default function Home(){
 
         <div className="trade-tabs">
           {["Positions","Pending Orders","History"].map(tab=><button className={activeTab===tab?"selected":""} key={tab} onClick={()=>setActiveTab(tab)}>{tab}</button>)}
-          <span className="trade-summary">Balance <b>$10,000.00</b> · Equity <b>$10,000.00</b> · Free Margin <b>$10,000.00</b></span>
+          <span className="trade-summary">Balance <b>${Number(activeAccount?.balance??0).toLocaleString("en-US",{minimumFractionDigits:2})}</b> · Equity <b>${Number(activeAccount?.equity??0).toLocaleString("en-US",{minimumFractionDigits:2})}</b> · Free Margin <b>${Number(activeAccount?.free_margin??0).toLocaleString("en-US",{minimumFractionDigits:2})}</b></span>
         </div>
         <div className="trade-table">
           <div className="table-head"><span>SYMBOL</span><span>TYPE</span><span>VOLUME</span><span>OPEN PRICE</span><span>SL / TP</span><span>P/L</span><span>ACTION</span></div>
