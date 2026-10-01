@@ -31,6 +31,7 @@ export default function Home(){
   useEffect(()=>{if(!activeAccount?.id)return; const load=()=>{Promise.all([fetch(`/api/positions/persistent?accountId=${activeAccount.id}`,{cache:"no-store"}),fetch(`/api/orders/persistent?accountId=${activeAccount.id}`,{cache:"no-store"})]).then(async([p,o])=>{const pd=p.ok?await p.json():{};const od=o.ok?await o.json():{};setPositions(pd.positions??[]);setOrders(od.orders??[])}).catch(()=>{})};load();const timer=setInterval(load,5000);return()=>clearInterval(timer)},[activeAccount?.id]);
 
   const toggle=(key:keyof typeof aiAccess)=>setAiAccess(v=>({...v,[key]:!v}));
+  const closePosition=async(positionId:string)=>{if(accountType!=="demo")return;await fetch("/api/positions/manual-close",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({positionId})});};
   const submitOrder=async(side:"buy"|"sell")=>{if(!activeAccount?.id||accountType!=="demo")return;await fetch("/api/orders/persistent/create",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accountId:activeAccount.id,symbol:market.symbol,side,volume:Number(volume),stopLoss:document.querySelector<HTMLInputElement>("#sl")?.value||undefined,takeProfit:document.querySelector<HTMLInputElement>("#tp")?.value||undefined})});};
 
   return <main className="shell">
@@ -75,7 +76,7 @@ export default function Home(){
         </div>
         <div className="trade-table">
           <div className="table-head"><span>SYMBOL</span><span>TYPE</span><span>VOLUME</span><span>OPEN PRICE</span><span>SL / TP</span><span>P/L</span><span>ACTION</span></div>
-          {activeTab==="Positions" ? (positions.length ? positions.map(p=><div className="empty-row" key={p.id}>{p.symbol} · {p.side.toUpperCase()} · {p.volume} lots · {p.entry_price} · SL {p.stop_loss??"—"} / TP {p.take_profit??"—"}</div>) : <div className="empty-row">No open positions.</div>) : activeTab==="Pending Orders" ? (orders.filter(o=>o.status==="pending").length ? orders.filter(o=>o.status==="pending").map(o=><div className="empty-row" key={o.id}>{o.symbol} · {o.side.toUpperCase()} · {o.volume} lots · {o.type}</div>) : <div className="empty-row">No pending orders.</div>) : <div className="empty-row">Trade history will appear here.</div>}
+          {activeTab==="Positions" ? (positions.length ? positions.map(p=><div className="empty-row" key={p.id}>{p.symbol} · {p.side.toUpperCase()} · {p.volume} lots · {p.entry_price} · SL {p.stop_loss??"—"} / TP {p.take_profit??"—"} <button onClick={()=>closePosition(p.id)}>Close</button></div>) : <div className="empty-row">No open positions.</div>) : activeTab==="Pending Orders" ? (orders.filter(o=>o.status==="pending").length ? orders.filter(o=>o.status==="pending").map(o=><div className="empty-row" key={o.id}>{o.symbol} · {o.side.toUpperCase()} · {o.volume} lots · {o.type}</div>) : <div className="empty-row">No pending orders.</div>) : <div className="empty-row">Trade history will appear here.</div>}
         </div>
       </section>
 
