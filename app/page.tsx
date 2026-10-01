@@ -31,6 +31,7 @@ export default function Home(){
   useEffect(()=>{if(!activeAccount?.id)return; const load=()=>{Promise.all([fetch(`/api/positions/persistent?accountId=${activeAccount.id}`,{cache:"no-store"}),fetch(`/api/orders/persistent?accountId=${activeAccount.id}`,{cache:"no-store"})]).then(async([p,o])=>{const pd=p.ok?await p.json():{};const od=o.ok?await o.json():{};setPositions(pd.positions??[]);setOrders(od.orders??[])}).catch(()=>{})};load();const timer=setInterval(load,5000);return()=>clearInterval(timer)},[activeAccount?.id]);
 
   const toggle=(key:keyof typeof aiAccess)=>setAiAccess(v=>({...v,[key]:!v}));
+  const submitOrder=async(side:"buy"|"sell")=>{if(!activeAccount?.id||accountType!=="demo")return;await fetch("/api/orders/persistent/create",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accountId:activeAccount.id,symbol:market.symbol,side,volume:Number(volume)})});};
 
   return <main className="shell">
     <header className="topbar">
@@ -86,7 +87,7 @@ export default function Home(){
           <label>Volume (lots)<input value={volume} onChange={e=>setVolume(e.target.value)} inputMode="decimal"/></label>
           <div className="order-grid"><label>Stop Loss<input placeholder="Optional"/></label><label>Take Profit<input placeholder="Optional"/></label></div>
           <div className="order-info"><span>Estimated margin <b>$100.00</b></span><span>Spread <b>1.3 pips</b></span><span>Execution <b>Market</b></span></div>
-          <div className="order-buttons"><button className="sell">SELL <small>{market.bid}</small></button><button className="buy">BUY <small>{market.ask}</small></button></div>
+          <div className="order-buttons"><button className="sell" onClick={()=>submitOrder("sell")}>SELL <small>{market.bid}</small></button><button className="buy" onClick={()=>submitOrder("buy")}>BUY <small>{market.ask}</small></button></div>
         </div>
 
         <div className="card">
